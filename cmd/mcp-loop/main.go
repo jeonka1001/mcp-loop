@@ -31,7 +31,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	registry := service.NewRegistry(cfg, []adapter.Adapter{adapter.Gemini{}, adapter.Codex{}, adapter.Claude{}})
+	registry := service.NewRegistry(cfg, []adapter.Adapter{adapter.Codex{}, adapter.Claude{}, adapter.Antigravity{}})
 	ctrl := controller.New(registry, service.NewQueryService(registry))
 
 	server := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: serverVersion}, nil)

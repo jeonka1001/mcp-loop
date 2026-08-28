@@ -2,7 +2,7 @@
 //
 //	go run ./cmd/smoke                      핸드셰이크 + 툴 목록 + list_agents
 //	go run ./cmd/smoke codex                위 + codex에 실제 질의
-//	go run ./cmd/smoke codex,gemini "질문"   다중 에이전트 질의
+//	go run ./cmd/smoke codex,claude "질문"   다중 에이전트 질의
 package main
 
 import (

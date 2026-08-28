@@ -3,6 +3,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -59,11 +60,14 @@ func ResolvePath() string {
 	return filepath.Join(dir, "..", "config", "agents.json")
 }
 
-// Load는 설정 파일을 읽는다. 파일이 없으면 기본값을 쓰고, 형식이 깨졌으면 ConfigError를 반환한다.
+// Load는 설정 파일을 읽는다. 파일이 없으면 기본값을 쓰고, 그 외 읽기 실패나 형식이 깨졌으면 ConfigError를 반환한다.
 func Load(path string) (Loop, error) {
 	raw, err := os.ReadFile(path)
-	if err != nil {
+	if errors.Is(err, os.ErrNotExist) {
 		return fallback(), nil
+	}
+	if err != nil {
+		return Loop{}, apperr.Configf("설정 파일 읽기 실패 (%s): %v", path, err)
 	}
 	cfg := fallback()
 	if err := json.Unmarshal(raw, &cfg); err != nil {

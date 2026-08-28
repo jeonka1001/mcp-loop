@@ -4,13 +4,6 @@
     "maxConcurrency": 3
   },
   "agents": {
-    "gemini": {
-      "enabled": true,
-      "command": "gemini",
-      "model": null,
-      "timeoutMs": 180000,
-      "env": {}
-    },
     "codex": {
       "enabled": true,
       "command": "codex",
@@ -21,6 +14,13 @@
     "claude": {
       "enabled": true,
       "command": "claude",
+      "model": null,
+      "timeoutMs": 300000,
+      "env": {}
+    },
+    "antigravity": {
+      "enabled": true,
+      "command": "agy",
       "model": null,
       "timeoutMs": 300000,
       "env": {}

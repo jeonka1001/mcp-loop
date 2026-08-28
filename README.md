@@ -1,6 +1,6 @@
 # mcp-loop
 
-구독 이용권(OAuth 세션)으로 로그인된 **Gemini / Codex / Claude CLI**에 질의를 대신 던져주는 MCP 서버.
+구독 이용권(OAuth 세션)으로 로그인된 **Codex / Claude / Antigravity CLI**에 질의를 대신 던져주는 MCP 서버.
 API 키 과금 경로를 쓰지 않으며, 호출할 에이전트는 MCP 클라이언트가 **명시적으로 선택**한다.
 
 Go 단일 바이너리로 빌드된다. 실행에 런타임 의존성이 없다.
@@ -11,29 +11,31 @@ Go 단일 바이너리로 빌드된다. 실행에 런타임 의존성이 없다.
 
 | 에이전트 | 실행 명령 | 사용하는 자격증명 |
 |---|---|---|
-| `gemini` | `gemini --output-format json` | `~/.gemini/oauth_creds.json` (Google OAuth) |
 | `codex`  | `codex exec --json --sandbox read-only --skip-git-repo-check -` | `~/.codex/auth.json` (`auth_mode: chatgpt`) |
 | `claude` | `claude --print --output-format json` | `~/.claude` (Pro/Max 로그인 세션) |
+| `antigravity` | `agy --print <prompt> --output-format json --mode plan` | Antigravity IDE 로그인 세션 |
 
-프롬프트는 argv가 아닌 **stdin**으로 전달한다(길이 제한·셸 이스케이프 회피).
+프롬프트는 argv가 아닌 **stdin**으로 전달한다(길이 제한·셸 이스케이프 회피). 단 `antigravity`(`agy`)는 stdin 입력을 지원하지 않는 CLI라 예외적으로 프롬프트를 인자 값으로 전달한다.
 
 ### API 키 폴백 차단
 
 CLI를 실행할 때 상속 환경변수에서 아래 키를 **제거**한다. 구독 세션이 만료돼도 API 키로 조용히 넘어가 과금되는 일이 없다.
 
-- gemini: `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_GENAI_USE_VERTEXAI`, `GOOGLE_GENAI_USE_GCA`, `GOOGLE_APPLICATION_CREDENTIALS`
 - codex: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `CODEX_API_KEY`
 - claude: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY_HELPER`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`
+- antigravity: `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`
 
 ## 사전 준비
 
 Go 1.25 이상이 필요하다.
 
 ```bash
-npm i -g @google/gemini-cli @openai/codex @anthropic-ai/claude-code
+npm i -g @openai/codex @anthropic-ai/claude-code
 ```
 
-각 CLI를 한 번씩 실행해 로그인해 둔다 (`gemini`, `codex login`, `claude`).
+`antigravity`(`agy`)는 npm 패키지가 아니라 [Antigravity IDE](https://antigravity.google) 설치 시 함께 깔리는 CLI다. IDE에 한 번 로그인해두면 `~/.local/bin/agy`가 그 세션을 그대로 쓴다. `~/.local/bin`을 PATH에 추가해야 기본값 `command: "agy"`로 바로 동작한다 (개인 절대 경로를 커밋되는 `config/agents.json`에 넣지 말 것 — 필요하면 `MCP_LOOP_CONFIG`로 개인 설정 파일을 따로 지정한다).
+
+각 CLI를 한 번씩 실행해 로그인해 둔다 (`codex login`, `claude`, Antigravity IDE).
 로그인하지 않은 에이전트는 `list_agents`에서 상태로 드러나며, 호출 시 안내 메시지와 함께 실패한다.
 
 ## 빌드
@@ -87,7 +89,7 @@ claude mcp list
 
 | 인자 | 필수 | 설명 |
 |---|---|---|
-| `agent` | ✅ | `gemini` \| `codex` \| `claude` (스키마 enum으로 강제) |
+| `agent` | ✅ | `codex` \| `claude` \| `antigravity` (스키마 enum으로 강제) |
 | `prompt` | ✅ | 질문/지시문 (최대 200,000자) |
 | `model` | | CLI가 지원하는 모델명. 미지정 시 CLI 기본값 |
 | `timeout_ms` | | 5,000 ~ 900,000 |
@@ -104,7 +106,7 @@ claude mcp list
 {
   "defaults": { "timeoutMs": 180000, "maxConcurrency": 3 },
   "agents": {
-    "gemini": { "enabled": true, "command": "gemini", "model": null, "timeoutMs": 180000, "env": {} }
+    "codex": { "enabled": true, "command": "codex", "model": null, "timeoutMs": 300000, "env": {} }
   }
 }
 ```
@@ -132,7 +134,7 @@ make test
 ```bash
 make smoke                                   # 핸드셰이크 + 툴 목록 + list_agents
 make smoke AGENTS=codex                      # codex에 실제 질의
-make smoke AGENTS=codex,gemini PROMPT="질문"  # 다중 에이전트 질의
+make smoke AGENTS=codex,claude PROMPT="질문"  # 다중 에이전트 질의
 ```
 
 ## 구조 (DDD)
@@ -147,7 +149,7 @@ internal/agent/
   controller/controller.go                 MCP 툴 진입점 (service에 위임만)
   controller/schema.go                     툴 입력 스키마 (agent enum 생성)
   adapter/adapter.go                        Adapter 인터페이스 + JSON 파싱 헬퍼
-  adapter/{gemini,codex,claude}.go         CLI 인자 생성 + 출력 파싱
+  adapter/{codex,claude,antigravity}.go     CLI 인자 생성 + 출력 파싱
 internal/shared/
   process/runner.go                        실행, env 새니타이즈, 타임아웃(SIGTERM→SIGKILL)
   config/config.go                         설정 로더
@@ -158,15 +160,8 @@ internal/shared/
 
 ## 트러블슈팅
 
-**`ProjectIdRequiredError` (gemini, exit 41)**
-계정이 Google Cloud 프로젝트를 요구하는 경우다. 프로젝트 ID를 설정에 넣는다.
-
-```json
-{ "agents": { "gemini": { "env": { "GOOGLE_CLOUD_PROJECT": "your-project-id" } } } }
-```
-
 **CLI를 PATH에서 찾을 수 없음**
-MCP 클라이언트가 로그인 셸 PATH를 상속하지 않는 경우가 있다. `config/agents.json`의 `command`에 절대 경로를 지정한다.
+MCP 클라이언트가 로그인 셸 PATH를 상속하지 않는 경우가 있다. 개인 환경의 절대 경로는 커밋되는 `config/agents.json`에 넣지 말고, `MCP_LOOP_CONFIG`로 가리키는 개인 설정 파일의 `command`에 지정한다.
 
 ## 한계
 

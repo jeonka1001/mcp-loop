@@ -13,7 +13,7 @@ vet:
 
 # make smoke                    핸드셰이크 + 툴 목록 + list_agents
 # make smoke AGENTS=codex       codex에 실제 질의
-# make smoke AGENTS=codex,gemini PROMPT="질문"
+# make smoke AGENTS=codex,claude PROMPT="질문"
 smoke: build
 	go run ./cmd/smoke $(AGENTS) $(if $(PROMPT),"$(PROMPT)",)
 
