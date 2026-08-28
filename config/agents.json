@@ -1,0 +1,29 @@
+{
+  "defaults": {
+    "timeoutMs": 180000,
+    "maxConcurrency": 3
+  },
+  "agents": {
+    "gemini": {
+      "enabled": true,
+      "command": "gemini",
+      "model": null,
+      "timeoutMs": 180000,
+      "env": {}
+    },
+    "codex": {
+      "enabled": true,
+      "command": "codex",
+      "model": null,
+      "timeoutMs": 300000,
+      "env": {}
+    },
+    "claude": {
+      "enabled": true,
+      "command": "claude",
+      "model": null,
+      "timeoutMs": 300000,
+      "env": {}
+    }
+  }
+}
