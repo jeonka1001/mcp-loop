@@ -1,6 +1,6 @@
 # mcp-loop
 
-Codex / Claude / Antigravity CLI의 **구독 세션**을 그대로 재사용해 질의를 중계하는 MCP 서버. API 키 종량 과금 없이, 이미 로그인된 CLI를 비대화형 서브프로세스로 실행한다.
+Codex / Claude / Antigravity CLI의 **구독 세션**을 그대로 재사용해 질의를 중계하는 MCP 서버. **API 키 종량 과금 없이, 이미 로그인된 CLI를 비대화형 서브프로세스로 실행한다.**
 
 ## 왜 만들었나
 
