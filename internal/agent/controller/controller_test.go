@@ -21,7 +21,7 @@ func newSession(t *testing.T) *mcp.ClientSession {
 		Defaults: config.Defaults{TimeoutMs: 180_000, MaxConcurrency: 3},
 		Agents:   map[string]config.AgentOverride{},
 	}
-	registry := service.NewRegistry(cfg, []adapter.Adapter{adapter.Gemini{}, adapter.Codex{}, adapter.Claude{}})
+	registry := service.NewRegistry(cfg, []adapter.Adapter{adapter.Codex{}, adapter.Claude{}, adapter.Antigravity{}})
 	server := mcp.NewServer(&mcp.Implementation{Name: "mcp-loop", Version: "test"}, nil)
 	controller.New(registry, service.NewQueryService(registry)).Register(server)
 
@@ -53,7 +53,7 @@ func TestListAgentsReportsAllAdapters(t *testing.T) {
 	if isError {
 		t.Fatalf("list_agents가 실패했다: %s", text)
 	}
-	for _, id := range []string{"gemini", "codex", "claude"} {
+	for _, id := range []string{"codex", "claude", "antigravity"} {
 		if !strings.Contains(text, id) {
 			t.Errorf("list_agents 결과에 %q가 없다: %s", id, text)
 		}

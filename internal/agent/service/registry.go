@@ -84,8 +84,6 @@ func (r *Registry) resolveConfig(item adapter.Adapter) entity.Config {
 	defaults := item.Defaults()
 	override := r.cfg.Agents[item.ID()]
 	return entity.Config{
-		ID:        item.ID(),
-		Label:     item.Label(),
 		Enabled:   boolOr(override.Enabled, true),
 		Command:   stringOr(override.Command, defaults.Command),
 		ExtraArgs: sliceOr(override.ExtraArgs, defaults.ExtraArgs),

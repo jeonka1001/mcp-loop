@@ -15,8 +15,6 @@ const (
 
 // Config는 어댑터 기본값과 설정 파일 override를 합친 최종 에이전트 설정이다.
 type Config struct {
-	ID        string
-	Label     string
 	Enabled   bool
 	Command   string
 	ExtraArgs []string

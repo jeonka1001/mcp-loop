@@ -48,7 +48,7 @@ func (c *Controller) Register(server *mcp.Server) {
 	ids := c.registry.IDs()
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_agents",
-		Description: "사용 가능한 에이전트(gemini/codex/claude)의 설치 상태, 활성화 여부, 기본 모델, 인증 안내를 조회한다.",
+		Description: "사용 가능한 에이전트의 설치 상태, 활성화 여부, 기본 모델, 인증 안내를 조회한다.",
 		InputSchema: &jsonschema.Schema{Type: "object", Properties: map[string]*jsonschema.Schema{}},
 	}, c.listAgents)
 
