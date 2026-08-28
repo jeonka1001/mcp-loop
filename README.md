@@ -1,170 +1,31 @@
 # mcp-loop
 
-구독 이용권(OAuth 세션)으로 로그인된 **Codex / Claude / Antigravity CLI**에 질의를 대신 던져주는 MCP 서버.
-API 키 과금 경로를 쓰지 않으며, 호출할 에이전트는 MCP 클라이언트가 **명시적으로 선택**한다.
+Codex / Claude / Antigravity CLI의 **구독 세션**을 그대로 재사용해 질의를 중계하는 MCP 서버. API 키 종량 과금 없이, 이미 로그인된 CLI를 비대화형 서브프로세스로 실행한다.
 
-Go 단일 바이너리로 빌드된다. 실행에 런타임 의존성이 없다.
+## 왜 만들었나
 
-## 동작 원리
+여러 CLI 구독(ChatGPT Plus, Claude Pro, Antigravity)을 갖고 있는데도 MCP로 묶으려면 종량제 API 키를 또 써야 하는 게 낭비라고 생각했다. 대신 이미 인증된 CLI 세션을 그대로 재사용하는 방식을 택했다.
 
-각 벤더 SDK를 호출하지 않고, 이미 로그인된 CLI를 비대화형 모드로 자식 프로세스 실행한다.
+## 설계에서 신경 쓴 부분
 
-| 에이전트 | 실행 명령 | 사용하는 자격증명 |
-|---|---|---|
-| `codex`  | `codex exec --json --sandbox read-only --skip-git-repo-check -` | `~/.codex/auth.json` (`auth_mode: chatgpt`) |
-| `claude` | `claude --print --output-format json` | `~/.claude` (Pro/Max 로그인 세션) |
-| `antigravity` | `agy --print <prompt> --output-format json --mode plan` | Antigravity IDE 로그인 세션 |
+- **API 키 폴백 차단**: 서브프로세스 환경변수에서 API 키 관련 변수를 명시적으로 제거해, 구독이 만료돼도 조용히 종량 과금으로 넘어가는 걸 원천 차단한다.
+- **어댑터 패턴**: JSON stdout, JSONL 이벤트 스트림, 인자 기반 프롬프트 등 프로토콜이 전혀 다른 CLI 3종을 단일 `Adapter` 인터페이스로 통합했다. 에이전트 추가는 파일 1개 + 등록 1줄.
+- **안전한 프로세스 관리**: SIGTERM→SIGKILL 타임아웃, 출력 버퍼 상한, "자동 전체 호출" 경로 자체를 없애 명시적으로 선택한 에이전트만 호출되도록 강제했다.
+- **실전 트러블슈팅**: Google이 Gemini CLI 개인 티어를 서비스 정책으로 막았을 때 대체 에이전트(Antigravity)를 발굴해 통합했고, 그 CLI의 헤드리스 권한 이슈도 내부 로그를 직접 분석해 원인을 규명하고 절충안을 설계했다.
 
-프롬프트는 argv가 아닌 **stdin**으로 전달한다(길이 제한·셸 이스케이프 회피). 단 `antigravity`(`agy`)는 stdin 입력을 지원하지 않는 CLI라 예외적으로 프롬프트를 인자 값으로 전달한다.
+## 구조
 
-### API 키 폴백 차단
+`entity`(도메인 모델) → `adapter`(CLI별 프로토콜 변환) → `service`(오케스트레이션) → `controller`(MCP 진입점)로 계층을 분리했다.
 
-CLI를 실행할 때 상속 환경변수에서 아래 키를 **제거**한다. 구독 세션이 만료돼도 API 키로 조용히 넘어가 과금되는 일이 없다.
+## Stack
 
-- codex: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `CODEX_API_KEY`
-- claude: `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY_HELPER`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`
-- antigravity: `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`
+Go · [MCP Go SDK](https://github.com/modelcontextprotocol/go-sdk)
 
-## 사전 준비
-
-Go 1.25 이상이 필요하다.
-
-```bash
-npm i -g @openai/codex @anthropic-ai/claude-code
-```
-
-`antigravity`(`agy`)는 npm 패키지가 아니라 [Antigravity IDE](https://antigravity.google) 설치 시 함께 깔리는 CLI다. IDE에 한 번 로그인해두면 `~/.local/bin/agy`가 그 세션을 그대로 쓴다. `~/.local/bin`을 PATH에 추가해야 기본값 `command: "agy"`로 바로 동작한다 (개인 절대 경로를 커밋되는 `config/agents.json`에 넣지 말 것 — 필요하면 `MCP_LOOP_CONFIG`로 개인 설정 파일을 따로 지정한다).
-
-각 CLI를 한 번씩 실행해 로그인해 둔다 (`codex login`, `claude`, Antigravity IDE).
-로그인하지 않은 에이전트는 `list_agents`에서 상태로 드러나며, 호출 시 안내 메시지와 함께 실패한다.
-
-## 빌드
+## 실행
 
 ```bash
 make build
+claude mcp add -s user mcp-loop -- $(pwd)/bin/mcp-loop
 ```
 
-## MCP 클라이언트 등록
-
-### 전역 등록 (권장)
-
-Claude Code CLI라면 `claude mcp add`로 user 스코프에 등록한다. 별도 설정 파일 없이 이후 모든 프로젝트·세션에서 자동으로 연결된다.
-
-```bash
-claude mcp add -s user mcp-loop -- /path/to/mcp-loop/bin/mcp-loop
-```
-
-등록 확인:
-
-```bash
-claude mcp list
-# mcp-loop: /path/to/mcp-loop/bin/mcp-loop  - ✔ Connected
-```
-
-이미 실행 중인 세션에는 반영되지 않는다. 새 세션을 열어야 툴이 노출된다.
-
-### 프로젝트 단위 등록
-
-특정 프로젝트에서만 쓰려면 해당 프로젝트 루트의 `.mcp.json`(Claude Code) 또는 클라이언트의 MCP 설정에 바이너리 절대 경로를 넣는다.
-
-```json
-{
-  "mcpServers": {
-    "mcp-loop": {
-      "command": "/path/to/mcp-loop/bin/mcp-loop"
-    }
-  }
-}
-```
-
-두 방식 모두 설정 파일은 바이너리 기준 `../config/agents.json`을 자동으로 찾는다. 다른 경로를 쓰려면 `MCP_LOOP_CONFIG` 환경변수를 지정한다.
-
-## 제공 툴
-
-### `list_agents`
-등록된 에이전트의 설치 여부, 활성화 상태, 기본 모델, 인증 안내를 반환한다. 인자 없음.
-
-### `ask_agent`
-지정한 **한 개** 에이전트에만 질의한다.
-
-| 인자 | 필수 | 설명 |
-|---|---|---|
-| `agent` | ✅ | `codex` \| `claude` \| `antigravity` (스키마 enum으로 강제) |
-| `prompt` | ✅ | 질문/지시문 (최대 200,000자) |
-| `model` | | CLI가 지원하는 모델명. 미지정 시 CLI 기본값 |
-| `timeout_ms` | | 5,000 ~ 900,000 |
-| `cwd` | | CLI 실행 작업 디렉터리 |
-
-### `ask_agents`
-`agents` 배열에 담긴 에이전트에만 같은 질의를 병렬 전달한다. 개별 성공/실패가 따로 표시되며, 일부가 실패해도 나머지 결과는 반환된다.
-
-> `agent` / `agents`는 필수이며 기본값이 없다. 입력 스키마에서 `required` + `minItems: 1`로 강제되므로 **모든 에이전트를 자동으로 호출하는 경로는 존재하지 않는다.**
-
-## 설정 — `config/agents.json`
-
-```json
-{
-  "defaults": { "timeoutMs": 180000, "maxConcurrency": 3 },
-  "agents": {
-    "codex": { "enabled": true, "command": "codex", "model": null, "timeoutMs": 300000, "env": {} }
-  }
-}
-```
-
-| 키 | 설명 |
-|---|---|
-| `enabled` | false면 호출이 거부된다 |
-| `command` | CLI 실행 파일명 또는 절대 경로 |
-| `extraArgs` | 어댑터가 만든 인자 뒤에 덧붙일 추가 인자 |
-| `model` | 해당 에이전트의 기본 모델 |
-| `timeoutMs` | 에이전트별 기본 타임아웃 |
-| `env` | CLI에 주입할 환경변수 |
-| `defaults.maxConcurrency` | `ask_agents` 동시 실행 수 |
-
-## 테스트
-
-```bash
-make test
-```
-
-인메모리 전송으로 서버-클라이언트를 붙여 툴 노출과 입력 거부 규칙을 검증한다. 실제 CLI는 호출하지 않는다.
-
-실제 에이전트까지 확인하려면 스모크 도구를 쓴다.
-
-```bash
-make smoke                                   # 핸드셰이크 + 툴 목록 + list_agents
-make smoke AGENTS=codex                      # codex에 실제 질의
-make smoke AGENTS=codex,claude PROMPT="질문"  # 다중 에이전트 질의
-```
-
-## 구조 (DDD)
-
-```
-cmd/mcp-loop/main.go                       MCP stdio 부트스트랩
-cmd/smoke/main.go                          실제 CLI까지 확인하는 스모크 도구
-internal/agent/
-  entity/agent.go                          데이터 모델 + 입력 검증 규칙
-  service/registry.go                      어댑터 기본값 + 설정 병합, 설치/활성 판정
-  service/query.go                         단일/다중 질의 오케스트레이션, 동시성 제어
-  controller/controller.go                 MCP 툴 진입점 (service에 위임만)
-  controller/schema.go                     툴 입력 스키마 (agent enum 생성)
-  adapter/adapter.go                        Adapter 인터페이스 + JSON 파싱 헬퍼
-  adapter/{codex,claude,antigravity}.go     CLI 인자 생성 + 출력 파싱
-internal/shared/
-  process/runner.go                        실행, env 새니타이즈, 타임아웃(SIGTERM→SIGKILL)
-  config/config.go                         설정 로더
-  apperr/errors.go                         도메인 에러
-```
-
-에이전트를 추가하려면 `adapter` 패키지에 `Adapter` 구현을 만들고 `cmd/mcp-loop/main.go`의 어댑터 슬라이스에 등록하면 된다. 툴 개수는 늘지 않고, `agent` enum에 자동으로 반영된다.
-
-## 트러블슈팅
-
-**CLI를 PATH에서 찾을 수 없음**
-MCP 클라이언트가 로그인 셸 PATH를 상속하지 않는 경우가 있다. 개인 환경의 절대 경로는 커밋되는 `config/agents.json`에 넣지 말고, `MCP_LOOP_CONFIG`로 가리키는 개인 설정 파일의 `command`에 지정한다.
-
-## 한계
-
-- 구독 rate limit은 CLI를 직접 쓸 때와 동일하게 공유된다. MCP를 경유해도 한도가 늘지 않는다.
-- 대화 맥락을 유지하지 않는다. 매 호출이 독립 세션이다.
-- codex는 `read-only` 샌드박스로 실행되어 파일을 수정하지 않는다.
+`list_agents` / `ask_agent` / `ask_agents` 3개 MCP 툴을 노출한다.
